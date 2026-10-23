@@ -1,0 +1,42 @@
+name: invoice extraction
+defaults:
+  repeat: 10
+  threshold: 0.9
+
+cases:
+  - name: reads the total from a clean invoice
+    prompt: |
+      Return JSON with the keys supplier, total and currency.
+      Invoice: Nordvik Bygg AB, 12 450 SEK including VAT.
+    checks:
+      - json_valid
+      - json_field: { path: supplier, equals: "Nordvik Bygg AB" }
+      - json_field: { path: total, equals: 12450 }
+      - json_field: { path: currency, equals: "SEK" }
+      - max_latency_ms: 2500
+
+  - name: keeps the shape when the amount is written in words
+    prompt: |
+      Return JSON with the keys supplier, total and currency.
+      Invoice: Sjöberg El, twelve thousand four hundred and fifty kronor.
+    threshold: 0.7
+    tags: [hard]
+    checks:
+      - json_schema:
+          schema:
+            type: object
+            required: [supplier, total, currency]
+            properties:
+              supplier: { type: string }
+              total: { type: number }
+              currency: { type: string, enum: [SEK, EUR, USD] }
+
+  - name: says so instead of guessing when the total is missing
+    prompt: |
+      Return JSON with the keys supplier, total and currency.
+      Invoice: Nordvik Bygg AB, amount illegible.
+    tags: [safety]
+    checks:
+      - json_valid
+      - json_field: { path: total, equals: null }
+      - not_contains: "0"
